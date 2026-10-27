@@ -2,6 +2,7 @@
 // https://github.com/Jinx2848/calc-lab-home
 // Compile with: gcc -O2 -Wall -Wextra -std=c17 -o calc calc.c -lm
 // Resources used: Class Slides, w3schools, geeksforgeeks- first two for general information, last one for info on parsers
+// i also found a similar project on w3resource to reference: https://www.w3resource.com/c-programming-exercises/basic-declarations-and-expressions/c-programming-basic-exercises-150.php
 // chatGPT was used once to provide a starting point/create a plan on how to complete the project. No code has been directly taken.
 
 #include <stdio.h>
@@ -116,4 +117,32 @@ double parse_term (Parse *p){
     return value;
 }
 
-//0245 EET. Commit two.
+//0303 hours EET. This one's gonna ensure the parser supports all operations AND parantheses! I think. I hope.
+double parse_expression(Parser *p){
+    double value = parse_term(P);
+    while (!p->has_error){
+        skip_spaces(p);
+        char op = p->input[p->pos];
+        if (op != "+" && op != "-"){
+            break;
+        }
+        p->pos++;
+        double right = parse_term(p);
+        if (p->has_error){
+            return 0.0;
+        }
+        if (op == "+"){
+            value += right;
+        }
+        else{
+            calue -= right;
+        }
+        if (!isfinite(value)){
+            p->has_error = 1;
+            p->error_pos = p->pos;
+            return 0.0;
+        }
+    }
+    return value;
+}
+// 0309 hours EET. Turns out once you get the hang of it you basically ensure it does the same thing under different circumstances.
