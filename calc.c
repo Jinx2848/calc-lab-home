@@ -23,11 +23,17 @@ typedef struct {
     int has_error;
     size_t operator_pos;
 } Parser;
+
+// right i forgot to check if it's a FLOAT.
+typedef struct{
+    double value;
+    int is_float;
+} EvalValue;
 // ok so let's separate functions. main, evaluating the file to spot errors, calculating, record errors
-double parse_expression(Parser *p);
-double parse_term(Parser *p);
-double parse_primary (Parser *p);
-double parse_power (Parser *p);
+EvalValue parse_expression(Parser *p);
+EvalValue parse_term(Parser *p);
+EvalValue parse_primary (Parser *p);
+EvalValue parse_power (Parser *p);
 
 // this func ensures unnecessary whitespace is skipped
 void skip_spaces(Parser *p){
@@ -37,7 +43,7 @@ void skip_spaces(Parser *p){
 }
 
 // this func reads the expression
-double parse_primary(Parser *p){
+EvalValue parse_primary(Parser *p){
     skip_spaces(p);
     //oh boy ok here we go. we take care of where the token begins
     size_t start = p->pos;
@@ -46,140 +52,174 @@ double parse_primary(Parser *p){
     // i think they call it pemdas in english?
     if (p->input[p->pos] == '(') {
         p->pos++;
-        double value = parse_expression(p);
+        EvalValue value = parse_expression(p);
         if (p->has_error){
-            return 0.0;
+            return (EvalValue){0.0, 0};
         }
         skip_spaces(p);
 
         if(p->input[p->pos] != ')'){
             p->has_error = 1;
             p->error_pos = p->pos;
-            return 0.0;
+            return (EvalValue){0.0, 0};
         }
 
         p->pos++;
         return value;
-
+    }
     // now we recognize the numebr
-    if(isdigit((unsigned char)p->input[p->pos]) || p->input[p->pos] == '.'){
+    // fix: have to require that the number requires digfits before decimal point
+    int is_float = 0;
+    if(isdigit((unsigned char)p->input[p->pos])){
+        size_t i = start;
+
+        while(isdigit((unsigned char)p->input[i])){
+            i++;
+        }
+        // fix: require digits after dp too
+        if(p->input[i] == '.'){
+            is_float = 1;
+            if(!isdigit((unsigned char)p->input[i+1])){
+                p->has_error = 1;
+                p->error_pos = i;
+                return (EvalValue){0.0, 0};
+            }
+            i++;
+            while(isdigit((unsigned char)p->input[i])){
+                i++;
+            }
+        }
         char *end;
         // learned strtod from geeksforgeeks
         double value = strtod(&p->input[p->pos], &end);
 
-        if (end == &p->input[p->pos]){
+        if (end != &p->input[i]){
         p->has_error = 1;
         p->error_pos = start;
-        return 0.0;
+        return (EvalValue){0.0, 0};
         }
-
-        p->pos += (size_t)(end - &p->input[p->pos]); //it took me three tries to write size_t.
+        p->pos = i;
         if (!isfinite(value)){
             p->has_error = 1;
             p->error_pos = start;
-            return 0.0;   
+            return (EvalValue){0.0, 0};   
         }
-        return value;
+        return (EvalValue){value, is_float};
     }
     p->has_error = 1;
     p->error_pos = start;
-    return 0.0;
-    }
-    p->has_error = 1;
-    p->error_pos = start;
-    return 0.0;
+    return (EvalValue){0.0, 0};
 }
 // used chatgpt here because it gave and error and my very tired mind could not spot it. turns out it was a typo defining the parser.
 
 // we're back from our new commit! it's 0230 hours EET.
-double parse_term (Parser *p){
-    double value = parse_power(p);
+EvalValue parse_term (Parser *p){
+    EvalValue value = parse_power(p);
     while (!p->has_error){
         skip_spaces(p);
+        size_t op_pos = p->pos;
         char op = p->input[p->pos];
         if (op != '*' && op != '/'){
             break;
         }
-        if (op == '*' && p->input[p->pos + 1] == '*')
+        if (op == '*' && p->input[p->pos + 1] == '*'){
             break;
+        }
+        p->operator_pos = op_pos;
         p->pos++;
-        double right = parse_power(p);
+        skip_spaces(p);
+        size_t right_start = p->pos;
+        EvalValue right = parse_power(p);
         if (p->has_error){
-            return 0.0;
+            return (EvalValue){0.0, 0};
         }
         if (op == '*'){
-            value *= right;
+            value.value *= right.value;
+            value.is_float = value.is_float || right.is_float;
         }
         else{
-            if (right == 0.0){
+            if (right.value == 0.0){
                 p->has_error = 1;
-                p->error_pos = p->operator_pos;
-                return 0.0;
+                p->error_pos = right_start;
+                return (EvalValue){0.0, 0};
             }
-            value /= right;
+            if (!value.is_float && !right.is_float) {
+                value.value = trunc(value.value / right.value);
+                value.is_float = 0;
+            } else {
+                value.value /= right.value;
+                value.is_float = 1;
+            }
         }
-        if (!isfinite(value)){
+        if (!isfinite(value.value)){
             p->has_error = 1;
-            p->error_pos = p->operator_pos;
-            return 0.0;
+            p->error_pos = op_pos;
+            return (EvalValue){0.0, 0};
         }
     }
     return value;
 }
 
 //0303 hours EET. This one's gonna ensure the parser supports all operations AND parantheses! I think. I hope.
-double parse_expression(Parser *p){
-    double value = parse_term(p);
+EvalValue parse_expression(Parser *p){
+    EvalValue value = parse_term(p);
     while (!p->has_error){
         skip_spaces(p);
+        size_t op_pos = p->pos;
         char op = p->input[p->pos];
         if (op != '+' && op != '-'){
             break;
         }
+        p->operator_pos = op_pos;
         p->pos++;
-        double right = parse_term(p);
+        EvalValue right = parse_term(p);
         if (p->has_error){
-            return 0.0;
+            return (EvalValue){0.0, 0};
         }
         if (op == '+'){
-            value += right;
+            value.value += right.value;
         }
         else{
-            value -= right;
+            value.value -= right.value;
         }
-        if (!isfinite(value)){
+        value.is_float = value.is_float || right.is_float;
+        if (!isfinite(value.value)){
             p->has_error = 1;
-            p->error_pos = p->pos;
-            return 0.0;
+            p->error_pos = op_pos;
+            return (EvalValue){0.0, 0};
         }
     }
     return value;
 }
 // 0309 hours EET. Turns out once you get the hang of it you basically ensure it does the same thing under different circumstances.
 // water break! please hydrate! I forgot to do exponentials so let's go back up there.
-double parse_power(Parser *p){
-    double value = parse_primary(p);
+EvalValue parse_power(Parser *p){
+    EvalValue value = parse_primary(p);
     if(p->has_error){
-        return 0.0;
+        return (EvalValue){0.0, 0};
     }
     skip_spaces(p);
     if(p->input[p->pos] == '*' && p->input[p->pos+1] == '*'){ //i cant believe there isnt a simpler way to check this
-        size_t operator_pos = p->pos;
+        size_t op_pos = p->pos;
+        p->operator_pos = op_pos;
         p->pos+=2;
-        double exponent = parse_power(p);
+        skip_spaces(p);
+        size_t exponent_start = p->pos;
+        EvalValue exponent = parse_power(p);
         if(p->has_error){
-            return 0.0;
+            return (EvalValue){0.0, 0};
         }
-        if(exponent < 0.0 && floor(exponent) == exponent){
+        if(exponent.value < 0.0){
             p->has_error = 1;
-            p->error_pos = operator_pos;
-            return 0.0;
+            p->error_pos = exponent_start;
+            return (EvalValue){0.0, 0};
         }
-        value = pow(value, exponent);
-        if (!isfinite(value)){
+        value.value = pow(value.value, exponent.value);
+        value.is_float = value.is_float || exponent.is_float || value.value != trunc(value.value);
+        if (!isfinite(value.value)){
             p->has_error = 1;
-            p->error_pos = operator_pos;
-            return 0.0;
+            p->error_pos = op_pos;
+            return (EvalValue){0.0, 0};
         }
     }
     return value;
@@ -285,9 +325,16 @@ int main(int argc, char *argv[]) {
         if (len >= 4 && strcmp(base + len - 4, ".txt") == 0)
             base[len - 4] = '\0';
 
-        snprintf(output_path, sizeof(output_path),
-                 "%s/%s_%s_%s_%s.txt",
-                 output_dir, base, name, lastname, id);
+        int path_len = snprintf(output_path, sizeof(output_path),
+                        "%s/%s_%s_%s_%s.txt",
+                        output_dir, base, name, lastname, id);
+
+if (path_len < 0 || (size_t)path_len >= sizeof(output_path)) {
+    fprintf(stderr, "Output path is too long.\n");
+    status = 1;
+    if (!input_dir) break;
+    continue;
+}
 
         FILE *in = fopen(input_path, "rb");
 
@@ -367,7 +414,7 @@ int main(int argc, char *argv[]) {
 
             if (first < n && line[first] != '#') {
                 Parser p = {line, 0, 0, 0, 0};
-                double value = parse_expression(&p);
+                EvalValue value = parse_expression(&p);
                 skip_spaces(&p);
 
                 if (!p.has_error && line[p.pos] != '\0') {
@@ -379,7 +426,7 @@ int main(int argc, char *argv[]) {
                     error = start + p.error_pos + 1;
                 } else {
                     char answer[128];
-                    snprintf(answer, sizeof(answer), "%.15g\n", value);
+                    snprintf(answer, sizeof(answer), "%.15g\n", value.value);
                     size_t needed = strlen(answer);
 
                     if (used + needed + 1 > outcap) {
