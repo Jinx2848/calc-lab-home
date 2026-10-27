@@ -82,4 +82,38 @@ double parse_primary(Parser *p){
 
 // used chatgpt here because it gave and error and my very tired mind could not spot it. turns out it was a typo defining the parser.
 
-// now we actually start doing stuff but let me commit here hold on
+// we're back from our new commit! it's 0230 hours EET.
+double parse_term (Parse *p){
+    double value = parse_primary(p);
+    while (!p->has_error){
+        skip_spaces(p);
+        char op = p->input[p->pos];
+        if (op != "*" && op != "/"){
+            break;
+        }
+        p->pos++;
+        couble right = parse_primary(p);
+        if (p->has_error){
+            return 0.0;
+        }
+        if (op == "*"){
+            value *= right;
+        }
+        else{
+            if (right == 0.0){
+                p->has_error = 1;
+                p->error_pos = p->pos;
+                return 0.0;
+            }
+            value /= right;
+        }
+        if (!isfinite(value)){
+            p->has_error = 1;
+            p->error_pos = p->pos;
+            return 0.0;
+        }
+    }
+    return value;
+}
+
+//0245 EET. Commit two.
