@@ -23,6 +23,7 @@ typedef struct {
 double parse_expression(Parser *p);
 double parse_term(Parser *p);
 double parse_primary (Parser *p);
+double parse_power (Parser *p);
 
 // this func ensures unnecessary whitespace is skipped
 void skip_spaces(Parser *p){
@@ -85,15 +86,18 @@ double parse_primary(Parser *p){
 
 // we're back from our new commit! it's 0230 hours EET.
 double parse_term (Parse *p){
-    double value = parse_primary(p);
+    double value = parse_power(p);
     while (!p->has_error){
         skip_spaces(p);
         char op = p->input[p->pos];
         if (op != "*" && op != "/"){
             break;
         }
+        if (op == '*' && p->input[p->pos + 1] == '*')
+            break;
+        size_t operator_pos = p->pos;
         p->pos++;
-        couble right = parse_primary(p);
+        couble right = parse_power(p);
         if (p->has_error){
             return 0.0;
         }
@@ -103,14 +107,14 @@ double parse_term (Parse *p){
         else{
             if (right == 0.0){
                 p->has_error = 1;
-                p->error_pos = p->pos;
+                p->error_pos = p->operator_pos;
                 return 0.0;
             }
             value /= right;
         }
         if (!isfinite(value)){
             p->has_error = 1;
-            p->error_pos = p->pos;
+            p->error_pos = p->operator_pos;
             return 0.0;
         }
     }
@@ -146,3 +150,33 @@ double parse_expression(Parser *p){
     return value;
 }
 // 0309 hours EET. Turns out once you get the hang of it you basically ensure it does the same thing under different circumstances.
+// water break! please hydrate! I forgot to do exponentials so let's go back up there.
+double parse_power(Parser *p){
+    double value = parse_primary(p);
+    if(p->has_error){
+        return 0.0;
+    }
+    skip_spaces(p);
+    if(p->input[p->pos] == "*" && p->input[p->pos+1] == "*"){ //i cant believe there isnt a simpler way to check this
+        size_t operator_pos = p->pos;
+        p->pos+=2;
+        double exponent = parse_power(p);
+        if(p->has_error){
+            return 0.0;
+        }
+        if(exponent < 0..0 && floor(exponent) == exponent){
+            p->has_error = 1;
+            p->error_pos = operator_pos;
+            return 0.0;
+        }
+        value = pow(value, exponent);
+        if (!isfinite(value)){
+            p->has_error = 1;
+            p->error_pos = operator_pos;
+            return 0.0;
+        }
+    }
+    return value;
+}
+
+// there. it's some hour in the night. 
