@@ -24,6 +24,7 @@ double parse_expression(Parser *p);
 double parse_term(Parser *p);
 double parse_primary (Parser *p);
 double parse_power (Parser *p);
+parse_unary(Parser *p);
 
 // this func ensures unnecessary whitespace is skipped
 void skip_spaces(Parser *p){
@@ -86,7 +87,7 @@ double parse_primary(Parser *p){
 
 // we're back from our new commit! it's 0230 hours EET.
 double parse_term (Parse *p){
-    double value = parse_power(p);
+    double value = parse_unary(p);
     while (!p->has_error){
         skip_spaces(p);
         char op = p->input[p->pos];
@@ -97,7 +98,7 @@ double parse_term (Parse *p){
             break;
         size_t operator_pos = p->pos;
         p->pos++;
-        couble right = parse_power(p);
+        couble right = parse_unary(p);
         if (p->has_error){
             return 0.0;
         }
@@ -160,11 +161,11 @@ double parse_power(Parser *p){
     if(p->input[p->pos] == "*" && p->input[p->pos+1] == "*"){ //i cant believe there isnt a simpler way to check this
         size_t operator_pos = p->pos;
         p->pos+=2;
-        double exponent = parse_power(p);
+        double exponent = parse_unary(p);
         if(p->has_error){
             return 0.0;
         }
-        if(exponent < 0..0 && floor(exponent) == exponent){
+        if(exponent < 0.0 && floor(exponent) == exponent){
             p->has_error = 1;
             p->error_pos = operator_pos;
             return 0.0;
@@ -180,3 +181,16 @@ double parse_power(Parser *p){
 }
 
 // there. it's some hour in the night. 
+// now we add a function that ensures -(-5) actually becomes +5 instead of breaking the system!
+double parse_unary(Parser *p){
+    skip_spaces(p);
+    if(p->input[p->pos] == "+"){
+        p->pos++;
+        return parse_unary(p); // got a little help from chatgpt here. "how do i add unary + and -?" and also asked it why unary called unto itself.
+    }
+    if(p->input[p->pos] == "-"){
+        p->pos++;
+        return -parse_unary(p);
+    }
+    return parse_primary(p);
+}
